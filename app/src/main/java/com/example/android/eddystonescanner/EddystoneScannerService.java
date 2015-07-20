@@ -22,7 +22,7 @@ import java.util.List;
 public class EddystoneScannerService extends Service {
     private static final String TAG =
             EddystoneScannerService.class.getSimpleName();
-    
+
     // …if you feel like making the log a bit noisier…
     private static boolean DEBUG_SCAN = false;
 
@@ -70,7 +70,7 @@ public class EddystoneScannerService extends Service {
 
     //Callback interface for the UI
     public interface OnBeaconEventListener {
-        void onBeaconIdentifier(String deviceAddress, String instanceId);
+        void onBeaconIdentifier(String deviceAddress, int rssi, String instanceId);
         void onBeaconTelemetry(String deviceAddress, float battery, float temperature);
     }
 
@@ -143,14 +143,14 @@ public class EddystoneScannerService extends Service {
     }
 
     /* Handle UID packet discovery on the main thread */
-    private void processUidPacket(String deviceAddress, String id) {
+    private void processUidPacket(String deviceAddress, int rssi, String id) {
         if (DEBUG_SCAN) {
             Log.d(TAG, "Eddystone(" + deviceAddress + ") id = " + id);
         }
 
         if (mBeaconEventListener != null) {
             mBeaconEventListener
-                    .onBeaconIdentifier(deviceAddress, id);
+                    .onBeaconIdentifier(deviceAddress, rssi, id);
         }
     }
 
@@ -197,6 +197,7 @@ public class EddystoneScannerService extends Service {
             }
 
             final String deviceAddress = result.getDevice().getAddress();
+            final int rssi = result.getRssi();
             byte frameType = data[0];
             switch (frameType) {
                 case TYPE_UID:
@@ -205,7 +206,7 @@ public class EddystoneScannerService extends Service {
                     mCallbackHandler.post(new Runnable() {
                         @Override
                         public void run() {
-                            processUidPacket(deviceAddress, id);
+                            processUidPacket(deviceAddress, rssi, id);
                         }
                     });
                     break;

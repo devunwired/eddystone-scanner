@@ -2,6 +2,8 @@ package com.example.android.eddystonescanner;
 
 import android.util.Log;
 
+import java.text.NumberFormat;
+
 /**
  * Simple model class to house relevant data coming from
  * beacon advertisements.
@@ -11,31 +13,34 @@ public class SampleBeacon {
 
     public String deviceAddress;
     public String id;
+    public int latestRssi;
+    public long lastDetectedTimestamp;
+
     public float battery;
     public float temperature;
 
-    public SampleBeacon(String address, String identifier) {
-        deviceAddress = address;
-        id = identifier;
-        battery = -1f;
-        temperature = -1f;
+    public SampleBeacon(String address, int rssi, String identifier, long timestamp) {
+        this.deviceAddress = address;
+        this.latestRssi = rssi;
+        this.id = identifier;
+        this.lastDetectedTimestamp = timestamp;
+
+        this.battery = -1f;
+        this.temperature = -1f;
+    }
+
+    public void update(String address, int rssi, long timestamp) {
+        this.deviceAddress = address;
+        this.latestRssi = rssi;
+        this.lastDetectedTimestamp = timestamp;
     }
 
     @Override
     public String toString() {
-        if (battery < 0f && temperature < 0f) {
-            return id;
-        } else {
-            return String.format("%s: %.1fV, %s", id, battery,
-                    temperature < 0f ? "No Temp" : temperature+"C");
-        }
-    }
-
-    @Override
-    public boolean equals(Object object) {
-        return (object instanceof SampleBeacon)
-                && this.deviceAddress.equals(((SampleBeacon) object).deviceAddress);
-
+        return String.format("%s\n%ddBm    Battery: %s    Temperature: %s",
+                id, latestRssi,
+                battery < 0f ? "N/A" : String.format("%.1fV", battery),
+                temperature < 0f ? "N/A" : String.format("%.1fC", temperature));
     }
 
     // Parse the instance id out of a UID packet

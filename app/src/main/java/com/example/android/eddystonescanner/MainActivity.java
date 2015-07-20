@@ -8,6 +8,7 @@ import android.content.Intent;
 import android.content.ServiceConnection;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
+import android.os.Handler;
 import android.os.IBinder;
 import android.util.Log;
 import android.widget.ArrayAdapter;
@@ -19,6 +20,9 @@ import java.util.ArrayList;
 public class MainActivity extends ListActivity implements
         ServiceConnection, EddystoneScannerService.OnBeaconEventListener {
     private static final String TAG = MainActivity.class.getSimpleName();
+
+    private static final int EXPIRE_TIMEOUT = 5000;
+    private static final int EXPIRE_TASK_PERIOD = 1000;
 
     private EddystoneScannerService mService;
     private ArrayAdapter<SampleBeacon> mAdapter;
@@ -41,15 +45,43 @@ public class MainActivity extends ListActivity implements
         if (checkBluetoothStatus()) {
             Intent intent = new Intent(this, EddystoneScannerService.class);
             bindService(intent, this, BIND_AUTO_CREATE);
+
+            mHandler.post(mPruneTask);
         }
     }
 
     @Override
     protected void onPause() {
         super.onPause();
+        mHandler.removeCallbacks(mPruneTask);
+
         mService.setBeaconEventListener(null);
         unbindService(this);
     }
+
+    /* This task checks for beacons we haven't seen in awhile */
+    private Handler mHandler = new Handler();
+    private Runnable mPruneTask = new Runnable() {
+        @Override
+        public void run() {
+            final ArrayList<SampleBeacon> expiredBeacons = new ArrayList<>();
+            final long now = System.currentTimeMillis();
+            for (SampleBeacon beacon : mAdapterItems) {
+                long delta = now - beacon.lastDetectedTimestamp;
+                if (delta >= EXPIRE_TIMEOUT) {
+                    expiredBeacons.add(beacon);
+                }
+            }
+
+            if (!expiredBeacons.isEmpty()) {
+                Log.d(TAG, "Found " + expiredBeacons.size() + " expired");
+                mAdapterItems.removeAll(expiredBeacons);
+                mAdapter.notifyDataSetChanged();
+            }
+
+            mHandler.postDelayed(this, EXPIRE_TASK_PERIOD);
+        }
+    };
 
     /* Verify Bluetooth Support */
     private boolean checkBluetoothStatus() {
@@ -98,11 +130,12 @@ public class MainActivity extends ListActivity implements
 
     /* Handle callback events from the discovery service */
     @Override
-    public void onBeaconIdentifier(String deviceAddress, String instanceId) {
+    public void onBeaconIdentifier(String deviceAddress, int rssi, String instanceId) {
+        final long now = System.currentTimeMillis();
         for (SampleBeacon item : mAdapterItems) {
             if (instanceId.equals(item.id)) {
-                //Already have this one, make sure address is up to date
-                item.deviceAddress = deviceAddress;
+                //Already have this one, make sure device info is up to date
+                item.update(deviceAddress, rssi, now);
                 mAdapter.notifyDataSetChanged();
                 return;
             }
@@ -110,7 +143,7 @@ public class MainActivity extends ListActivity implements
 
         //New beacon, add it
         SampleBeacon beacon =
-                new SampleBeacon(deviceAddress, instanceId);
+                new SampleBeacon(deviceAddress, rssi, instanceId, now);
         mAdapterItems.add(beacon);
         mAdapter.notifyDataSetChanged();
     }
